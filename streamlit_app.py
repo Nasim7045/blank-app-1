@@ -44,7 +44,7 @@ def login_user(email, password):
     try:
         user = auth_client.sign_in_with_email_and_password(email, password)
         # Return only the user's email from the Firebase response
-        return user['email']  
+        return user['email']
     except:
         return None
 
@@ -61,6 +61,12 @@ def reset_password(email):
         return True
     except:
         return False
+
+# Fix for streamlit_cookies_manager NoValue issue
+try:
+    from streamlit.runtime.state import NoValue
+except ImportError:
+    NoValue = None  # Define a fallback or handle the absence of NoValue
 
 # Set up encrypted cookies for storing login state
 cookies = EncryptedCookieManager(
@@ -123,7 +129,7 @@ def main():
     # User logged in
     if st.session_state["logged_in"]:
         st.write(f"You are logged in as: {st.session_state['user_email']}")
-        
+
         if st.button("Logout"):
             st.session_state["logged_in"] = False
             st.session_state["user_email"] = None
