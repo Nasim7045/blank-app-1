@@ -44,29 +44,26 @@ def login_user(email, password):
     try:
         user = auth_client.sign_in_with_email_and_password(email, password)
         # Return only the user's email from the Firebase response
-        return user['email']
-    except:
+        return user['email']  
+    except Exception as e:
+        st.error(f"Error logging in: {e}")
         return None
 
 def register_user(email, password):
     try:
         auth_client.create_user_with_email_and_password(email, password)
         return True
-    except:
+    except Exception as e:
+        st.error(f"Error registering user: {e}")
         return False
 
 def reset_password(email):
     try:
         auth_client.send_password_reset_email(email)
         return True
-    except:
+    except Exception as e:
+        st.error(f"Error resetting password: {e}")
         return False
-
-# Fix for streamlit_cookies_manager NoValue issue
-try:
-    from streamlit.runtime.state import NoValue
-except ImportError:
-    NoValue = None  # Define a fallback or handle the absence of NoValue
 
 # Set up encrypted cookies for storing login state
 cookies = EncryptedCookieManager(
@@ -92,7 +89,7 @@ def check_session_timeout():
         if time_diff > TIMEOUT_DURATION:
             st.warning("Session timed out due to inactivity. Please log in again.")
             st.session_state["logged_in"] = False
-            st.session_state["user"] = None
+            st.session_state["user_email"] = None
             cookies["logged_in"] = "False"  # Update the cookie to reflect logout
             cookies.save()  # Save cookie changes
             st.experimental_rerun()
@@ -100,6 +97,34 @@ def check_session_timeout():
     # Update the last activity in cookies and session state
     cookies["last_activity"] = str(current_time)
     cookies.save()  # Don't forget to save the cookies!
+
+def list_all_users():
+    users = []
+    try:
+        # List all users from Firebase
+        for user in auth.list_users().iterate_all():
+            users.append({
+                "uid": user.uid,
+                "email": user.email,
+                "creation_time": user.user_metadata.creation_timestamp
+            })
+    except Exception as e:
+        st.error(f"Error retrieving users: {str(e)}")
+    return users
+
+def delete_user(user_id):
+    try:
+        auth.delete_user(user_id)
+        st.success(f"User {user_id} has been deleted.")
+    except Exception as e:
+        st.error(f"Failed to delete user {user_id}: {str(e)}")
+
+def update_user_password(user_id, new_password):
+    try:
+        auth.update_user(user_id, password=new_password)
+        st.success(f"Password updated successfully for user {user_id}.")
+    except Exception as e:
+        st.error(f"Failed to update password for user {user_id}: {str(e)}")
 
 def main():
     st.title('Firebase Authentication with Streamlit')
@@ -129,6 +154,46 @@ def main():
     # User logged in
     if st.session_state["logged_in"]:
         st.write(f"You are logged in as: {st.session_state['user_email']}")
+
+        # Main menu options
+        menu_options = ["Main Menu", "Settings", "About", "Admin Mode"]
+        choice = st.sidebar.selectbox("Choose an option", menu_options)
+
+        # Display selected option's page
+        if choice == "Main Menu":
+            st.subheader("Welcome to the Main Menu")
+            st.write("This is the main menu. Choose other options from the sidebar.")
+
+        elif choice == "Settings":
+            st.subheader("Settings")
+            st.write("Settings page (to be implemented).")
+
+        elif choice == "About":
+            st.subheader("About")
+            st.write("About page (to be implemented).")
+
+        elif choice == "Admin Mode":
+            st.subheader("Admin Mode")
+            st.write("Manage registered users below.")
+
+            # Fetch and display all users
+            users = list_all_users()
+            if users:
+                for user in users:
+                    st.write(f"Email: {user['email']}, Created: {user['creation_time']}")
+
+                    # Delete user button
+                    if st.button(f"Delete {user['email']}"):
+                        delete_user(user['uid'])
+                        st.rerun()
+
+                    # Update password
+                    new_password = st.text_input(f"New Password for {user['email']}", type="password")
+                    if st.button(f"Update Password for {user['email']}"):
+                        if new_password:
+                            update_user_password(user['uid'], new_password)
+                        else:
+                            st.error("Password cannot be empty")
 
         if st.button("Logout"):
             st.session_state["logged_in"] = False
